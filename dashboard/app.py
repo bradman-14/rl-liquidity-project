@@ -78,32 +78,31 @@ def main():
 
     col_left, col_right = st.columns(2)
 
-    # Initialize charts with first row so Streamlit knows the columns
+    # Use containers, then create charts inside them
     with col_left:
         st.markdown("**Liquidity & APY over time**")
-        liq_chart = st.line_chart(df[["liquidity", "apy"]].iloc[:1])
+        liq_container = st.empty()
 
     with col_right:
         st.markdown("**Volatility & Reward over time**")
-        vol_chart = st.line_chart(df[["volatility", "reward"]].iloc[:1])
+        vol_container = st.empty()
 
     start_button = st.button("Start playback")
     status = st.empty()
 
     if start_button:
         while True:
-            # Clear charts each run
-            liq_chart.empty()
-            vol_chart.empty()
+            # Start from first row
+            current = df.iloc[:1]
 
-            # Re‑seed first point
-            liq_chart.add_rows(df[["liquidity", "apy"]].iloc[:1])
-            vol_chart.add_rows(df[["volatility", "reward"]].iloc[:1])
+            # Create charts fresh for each run with initial data
+            liq_chart = liq_container.line_chart(current[["liquidity", "apy"]])
+            vol_chart = vol_container.line_chart(current[["volatility", "reward"]])
 
             for t in range(1, total_steps):
                 current = df.iloc[: t + 1]
 
-                # Add only the latest row (must keep same columns)
+                # Add only the latest row (same columns as initial)
                 liq_chart.add_rows(current[["liquidity", "apy"]].tail(1))
                 vol_chart.add_rows(current[["volatility", "reward"]].tail(1))
 
