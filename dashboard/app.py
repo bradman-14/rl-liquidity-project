@@ -1,125 +1,83 @@
-import os
-import time
-
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import time
+from manual_vs_rl import run_comparison
 
+st.set_page_config(page_title="RL Liquidity Controller", layout="wide")
+st.title("🤖 RL vs Manual Liquidity Controller")
 
-DATA_PATH = "data/ppo_trajectory.csv"
+st.markdown("""
+Compare your manual APY adjustments against a trained **PPO agent** in real-time.
+**Goal**: Maximize liquidity while minimizing volatility (reward = liquidity - volatility - 0.1×APY).
+""")
 
+# Sidebar controls
+st.sidebar.header("🎮 Manual Controller")
+manual_apy_change = st.sidebar.slider(
+    "APY change per step (%)", -5.0, 5.0, 0.0, 0.1
+)
+num_steps = st.sidebar.slider("Steps to run", 100, 1000, 500, 50)
+strategy = st.sidebar.selectbox(
+    "Strategy", 
+    ["Constant", "Increasing", "Decreasing", "Random"]
+)
 
-@st.cache_data
-def load_data(csv_path: str = DATA_PATH) -> pd.DataFrame:
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"{csv_path} not found. Run rl/log_trajectory.py first.")
-    df = pd.read_csv(csv_path)
-    df = df.sort_values("step").reset_index(drop=True)
-    return df
-
-
-def render_header():
-    st.set_page_config(page_title="RL Liquidity Controller", layout="wide")
-    st.title("RL Liquidity Controller – PPO Trajectory")
-    st.markdown(
-        """
-This dashboard replays a single episode of a trained PPO agent controlling APY
-in a toy liquidity pool environment.
-
-- **Liquidity** should increase and stabilize.
-- **Volatility** should decrease as liquidity deepens.
-- **APY** is adjusted by the agent and may saturate at its upper bound.
-- **Reward** reflects the trade‑off between liquidity, volatility, and APY cost.
-"""
-    )
-
-
-def render_summary(df: pd.DataFrame):
-    latest = df.iloc[-1]
+# Generate manual actions based on strategy
+if st.sidebar.button("🚀 Run Comparison"):
+    if strategy == "Constant":
+        manual_actions = [manual_apy_change / 100] * num_steps
+    elif strategy == "Increasing":
+        manual_actions = np.linspace(-0.02, 0.02, num_steps).tolist()
+    elif strategy == "Decreasing":
+        manual_actions = np.linspace(0.02, -0.02, num_steps).tolist()
+    else:  # Random
+        manual_actions = (np.random.uniform(-0.05, 0.05, num_steps)).tolist()
+    
+    # Run comparison
+    with st.spinner("Running RL vs Manual..."):
+        df = run_comparison(manual_actions, num_steps)
+    
+    # Results
+    st.subheader("🏆 Final Results")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Final Liquidity", f"{latest['liquidity']:.3f}")
-    col2.metric("Final Volatility", f"{latest['volatility']:.3f}")
-    col3.metric("Final APY", f"{latest['apy'] * 100:.2f}%")
-    col4.metric("Mean Reward", f"{df['reward'].mean():.3f}")
-
-
-def main():
-    render_header()
-    df = load_data()
-
-    # Sidebar controls
-    st.sidebar.header("Playback controls")
-    max_step = int(df["step"].max())
-    total_steps = st.sidebar.slider(
-        "Number of steps to play",
-        min_value=50,
-        max_value=max_step,
-        value=min(500, max_step),
-        step=10,
-    )
-    speed = st.sidebar.slider(
-        "Playback speed (seconds per step)",
-        min_value=0.01,
-        max_value=0.5,
-        value=0.05,
-        step=0.01,
-    )
-    loop = st.sidebar.checkbox("Loop playback", value=False)
-    show_table = st.sidebar.checkbox("Show raw data table", value=False)
-
-    st.subheader("Episode summary")
-    render_summary(df)
-
-    if show_table:
-        st.markdown("#### Raw trajectory data (first 20 rows)")
-        st.dataframe(df.head(20), use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("Trajectory playback")
-
+    col1.metric("RL Liquidity", f"{df['rl_liquidity'].iloc[-1]:.3f}")
+    col2.metric("Manual Liquidity", f"{df['manual_liquidity'].iloc[-1]:.3f}")
+    col3.metric("RL Mean Reward", f"{df['rl_reward'].mean():.3f}")
+    col4.metric("Manual Mean Reward", f"{df['manual_reward'].mean():.3f}")
+    
+    # Charts
     col_left, col_right = st.columns(2)
-
-    # Use containers, then create charts inside them
+    
     with col_left:
-        st.markdown("**Liquidity & APY over time**")
-        liq_container = st.empty()
-
+        st.markdown("**💧 Liquidity**")
+        st.line_chart({
+            "RL": df['rl_liquidity'],
+            "Manual": df['manual_liquidity']
+        })
+    
     with col_right:
-        st.markdown("**Volatility & Reward over time**")
-        vol_container = st.empty()
-
-    start_button = st.button("Start playback")
-    status = st.empty()
-
-    if start_button:
-        while True:
-            # Start from first row
-            current = df.iloc[:1]
-
-            # Create charts fresh for each run with initial data
-            liq_chart = liq_container.line_chart(current[["liquidity", "apy"]])
-            vol_chart = vol_container.line_chart(current[["volatility", "reward"]])
-
-            for t in range(1, total_steps):
-                current = df.iloc[: t + 1]
-
-                # Add only the latest row (same columns as initial)
-                liq_chart.add_rows(current[["liquidity", "apy"]].tail(1))
-                vol_chart.add_rows(current[["volatility", "reward"]].tail(1))
-
-                latest = current.iloc[-1]
-                status.markdown(
-                    f"Step: {int(latest['step'])} &nbsp;&nbsp; "
-                    f"Liquidity: {latest['liquidity']:.3f} &nbsp;&nbsp; "
-                    f"Volatility: {latest['volatility']:.3f} &nbsp;&nbsp; "
-                    f"APY: {latest['apy'] * 100:.2f}% &nbsp;&nbsp; "
-                    f"Reward: {latest['reward']:.3f}"
-                )
-
-                time.sleep(speed)
-
-            if not loop:
-                break
-
-
-if __name__ == "__main__":
-    main()
+        st.markdown("**⚡ Volatility**")
+        st.line_chart({
+            "RL": df['rl_volatility'],
+            "Manual": df['manual_volatility']
+        })
+    
+    st.markdown("**📈 APY & Reward**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.line_chart({
+            "RL": df['rl_apy'] * 100,
+            "Manual": df['manual_apy'] * 100
+        }, y_axis_title="APY %")
+    with col2:
+        st.line_chart({
+            "RL": df['rl_reward'],
+            "Manual": df['manual_reward']
+        }, y_axis_title="Reward")
+    
+    # Winner
+    if df['rl_reward'].mean() > df['manual_reward'].mean():
+        st.success("🎉 **RL Wins!** Try a better strategy.")
+    else:
+        st.balloons()
+        st.success("🏆 **You beat RL!** Great strategy!")
