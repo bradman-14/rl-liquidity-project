@@ -6,7 +6,7 @@ from env import LiquidityEnv
 
 @st.cache_resource
 def load_model():
-    return PPO.load("models/ppo_liquidity")
+    return PPO.load("models/ppo_liquidity.zip")
 
 def run_comparison(manual_actions, num_steps=500):
     env = LiquidityEnv()
