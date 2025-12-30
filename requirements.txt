@@ -7,8 +7,7 @@ stable-baselines3[extra]
 requests
 pandas
 numpy
-streamlit
-echo "yfinance" >> dashboard/requirements.txt
+
 
 cat > dashboard/requirements.txt << EOF
 
