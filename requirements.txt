@@ -10,3 +10,9 @@ numpy
 streamlit
 echo "yfinance" >> dashboard/requirements.txt
 
+cat > dashboard/requirements.txt << EOF
+
+stable-baselines3==2.3.2
+gym==0.26.2
+EOF
+
