@@ -8,4 +8,5 @@ requests
 pandas
 numpy
 streamlit
+echo "yfinance" >> dashboard/requirements.txt
 
