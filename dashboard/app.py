@@ -112,21 +112,28 @@ Goal: maximize **liquidity** while minimizing **volatility** (reward = liquidity
 # ---------------------------------------------------------------------
 # TAB 2: Live Stock (read‑only)
 # ---------------------------------------------------------------------
+with col_cfg:
+    symbol = st.text_input("Stock symbol", value="AAPL")
+    period = st.selectbox("Period", ["1 day", "5 days", "1 month"])
+    live_button = st.button("📡 Fetch live data", use_container_width=True)
+
 with col_view:
     if live_button:
         try:
-            df_live = fetch_stock_data(symbol.strip().upper(), interval=interval)
+            period_days = {"1 day": 2, "5 days": 7, "1 month": 35}[period]
+            df_live = fetch_stock_data(symbol.strip().upper(), period_days)
             df_live = compute_features(df_live)
 
-            st.markdown(f"### {symbol.upper()} – latest data")
+            st.markdown(f"### {symbol.upper()} – {period}")
             last_row = df_live.iloc[-1]
             c1, c2, c3 = st.columns(3)
             c1.metric("Last price", f"${last_row['price']:.2f}")
             c2.metric("Last return", f"{last_row['return']:.4f}")
             c3.metric("Rolling vol", f"{last_row['volatility']:.4f}")
 
-            st.line_chart(df_live.set_index("datetime")["price"], use_container_width=True)
-            st.line_chart(df_live.set_index("datetime")["volatility"], use_container_width=True)
+            st.line_chart(df_live.set_index("date")["price"], use_container_width=True)
+            st.line_chart(df_live.set_index("date")["volatility"], use_container_width=True)
 
         except Exception as e:
             st.error(f"Error: {e}")
+
