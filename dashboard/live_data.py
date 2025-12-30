@@ -1,29 +1,36 @@
 cat > dashboard/live_data.py << 'EOF'
 import streamlit as st
 import pandas as pd
-import pandas_datareader.data as web
-from datetime import datetime, timedelta
 import numpy as np
+import requests
+import io
+from datetime import datetime, timedelta
 
 @st.cache_data(ttl=60)
-def fetch_stock_data(symbol: str, period_days: int = 1) -> pd.DataFrame:
-    """Fetch stock data using pandas_datareader + Yahoo (no extra deps, unlimited)."""
-    end = datetime.now()
-    start = end - timedelta(days=period_days)
+def fetch_stock_data(symbol: str) -> pd.DataFrame:
+    """Yahoo Finance CSV - works with all pandas versions."""
+    url = f"https://query1.finance.yahoo.com/v7/finance/download/{symbol}?period1={int((datetime.now() - timedelta(days=7)).timestamp())}&period2={int(datetime.now().timestamp())}&interval=5m&events=history&includeAdjustedClose=true"
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
     
     try:
-        df = web.DataReader(symbol, 'yahoo', start, end)
-        df = df.reset_index()
-        df.columns = [col.lower() for col in df.columns]
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        
+        # Use io.StringIO (universal across pandas versions)
+        df = pd.read_csv(io.StringIO(resp.text))
+        df['Datetime'] = pd.to_datetime(df['Datetime'])
+        df = df.sort_values('Datetime').reset_index(drop=True)
         return df
     except Exception as e:
-        raise ValueError(f"No data for {symbol}: {e}")
+        raise ValueError(f"No data for {symbol}: {str(e)[:100]}")
 
-def compute_features(df: pd.DataFrame, window: int = 12) -> pd.DataFrame:
-    """Compute returns and rolling volatility."""
+def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df['price'] = df['close']
+    df['price'] = df['Close']
     df['return'] = df['price'].pct_change()
-    df['volatility'] = df['return'].rolling(window=window, min_periods=3).std()
+    df['volatility'] = df['return'].rolling(12, min_periods=3).std()
     return df
 EOF
