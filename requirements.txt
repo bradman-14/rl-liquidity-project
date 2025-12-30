@@ -4,4 +4,8 @@ numpy
 matplotlib
 gymnasium
 stable-baselines3[extra]
+requests
+pandas
+numpy
+streamlit
 
