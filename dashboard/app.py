@@ -112,39 +112,21 @@ Goal: maximize **liquidity** while minimizing **volatility** (reward = liquidity
 # ---------------------------------------------------------------------
 # TAB 2: Live Stock (read‑only)
 # ---------------------------------------------------------------------
-with tab_live:
-    st.markdown("""
-Monitor a real stock and compute simple features (returns, volatility).
-This is **read‑only**: no real trading, just analytics.
-""")
+with col_view:
+    if live_button:
+        try:
+            df_live = fetch_stock_data(symbol.strip().upper(), interval=interval)
+            df_live = compute_features(df_live)
 
-    col_cfg, col_view = st.columns([1, 3])
+            st.markdown(f"### {symbol.upper()} – latest data")
+            last_row = df_live.iloc[-1]
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Last price", f"${last_row['price']:.2f}")
+            c2.metric("Last return", f"{last_row['return']:.4f}")
+            c3.metric("Rolling vol", f"{last_row['volatility']:.4f}")
 
-    with col_cfg:
-        symbol = st.text_input("Stock symbol", value="AAPL")
-        interval = st.selectbox("Interval", ["1min", "5min", "15min"], index=1)
-        live_button = st.button("📡 Fetch live data", use_container_width=True)
+            st.line_chart(df_live.set_index("datetime")["price"], use_container_width=True)
+            st.line_chart(df_live.set_index("datetime")["volatility"], use_container_width=True)
 
-    with col_view:
-        if live_button:
-            try:
-                df_live = fetch_intraday(symbol.strip().upper(), interval=interval)
-                df_live = compute_features(df_live)
-
-                st.markdown(f"### {symbol.upper()} – latest {interval} data")
-                last_row = df_live.iloc[-1]
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Last price", f"{last_row['price']:.2f}")
-                c2.metric("Last return", f"{last_row['return']:.4f}")
-                c3.metric("Rolling vol (20)", f"{last_row['volatility']:.4f}")
-
-                st.markdown("**Price**")
-                st.line_chart(df_live.set_index("timestamp")["price"])
-
-                st.markdown("**Rolling volatility (20 bars)**")
-                st.line_chart(df_live.set_index("timestamp")["volatility"])
-
-            except Exception as e:
-                st.error(f"Error fetching data: {e}")
-        else:
-            st.info("Enter a symbol and click **Fetch live data**.")
+        except Exception as e:
+            st.error(f"Error: {e}")
